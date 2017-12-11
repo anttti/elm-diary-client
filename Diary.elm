@@ -1,15 +1,22 @@
 module Diary exposing (..)
 
 import Html exposing (..)
-import Html.Attributes exposing (class)
+import Html.Attributes exposing (class, type_, value)
 import Html.Events exposing (..)
 import Http
 import Json.Decode exposing (Decoder)
 import Json.Decode.Pipeline exposing (..)
+import Json.Encode exposing (..)
 
 
 type alias Model =
     { entries : Maybe (List Entry)
+    , newEntry : NewEntry
+    }
+
+
+type alias NewEntry =
+    { content : String
     }
 
 
@@ -21,17 +28,17 @@ type alias Entry =
 
 
 type Msg
-    = HandleResponse (Result Http.Error (List Entry))
-    | HandleError
+    = HandleFetchResponse (Result Http.Error (List Entry))
+    | HandleHTTPError
+    | HandleSaveResponse (Result Http.Error Entry)
+    | SaveEntry
+    | UpdateContent String
 
 
 initialModel : Model
 initialModel =
-    { entries =
-        Just
-            [ Entry 0 "2012-12-11" "This is dummy content 1"
-            , Entry 1 "2012-12-12" "This is dummy content 2"
-            ]
+    { entries = Just []
+    , newEntry = { content = "" }
     }
 
 
@@ -43,7 +50,7 @@ init =
 update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
     case msg of
-        HandleResponse result ->
+        HandleFetchResponse result ->
             case (Debug.log "handling" result) of
                 Ok newEntries ->
                     ( { model | entries = Just newEntries }, Cmd.none )
@@ -51,8 +58,29 @@ update msg model =
                 Err error ->
                     ( model, Cmd.none )
 
-        HandleError ->
+        HandleSaveResponse result ->
+            case result of
+                Ok _ ->
+                    ( model, fetchEntries )
+
+                Err _ ->
+                    ( model, Cmd.none )
+
+        HandleHTTPError ->
             ( { model | entries = Nothing }, Cmd.none )
+
+        SaveEntry ->
+            ( model, saveEntry model.newEntry )
+
+        UpdateContent content ->
+            let
+                entry =
+                    model.newEntry
+
+                newEntry =
+                    { entry | content = content }
+            in
+                ( { model | newEntry = newEntry }, Cmd.none )
 
 
 view : Model -> Html Msg
@@ -60,6 +88,7 @@ view model =
     div []
         [ h1 [] [ text "Elm Diary" ]
         , viewEntries model.entries
+        , viewForm model.newEntry
         ]
 
 
@@ -80,6 +109,14 @@ viewEntry entry =
         ]
 
 
+viewForm : NewEntry -> Html Msg
+viewForm newEntry =
+    form [ onSubmit SaveEntry ]
+        [ textarea [ Html.Attributes.value newEntry.content, onInput UpdateContent ] []
+        , input [ type_ "submit", value "Save" ] []
+        ]
+
+
 fetchEntries : Cmd Msg
 fetchEntries =
     let
@@ -87,7 +124,7 @@ fetchEntries =
             "http://localhost:3000/entries"
     in
         Http.get url responseDecoder
-            |> Http.send HandleResponse
+            |> Http.send HandleFetchResponse
 
 
 responseDecoder : Decoder (List Entry)
@@ -101,3 +138,25 @@ entryDecoder =
         |> required "id" Json.Decode.int
         |> required "date" Json.Decode.string
         |> required "content" Json.Decode.string
+
+
+entryEncoder : NewEntry -> Json.Encode.Value
+entryEncoder entry =
+    Json.Encode.object
+        [ ( "content", Json.Encode.string entry.content )
+        ]
+
+
+saveEntry : NewEntry -> Cmd Msg
+saveEntry entry =
+    let
+        url =
+            "http://localhost:3000/entries"
+
+        body =
+            entry
+                |> entryEncoder
+                |> Http.jsonBody
+    in
+        Http.post url body entryDecoder
+            |> Http.send HandleSaveResponse
