@@ -1,0 +1,14 @@
+{
+  "name": "elm-diary-client",
+  "version": "1.0.0",
+  "description": "Elm Diary",
+  "scripts": {
+    "start": "elm-live App.elm --open --pushstate --output=app.js"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/anttti/elm-diary-client.git"
+  },
+  "author": "Antti Mattila",
+  "license": "MIT"
+}

@@ -1,2 +1,5 @@
 # elm-diary-client
-Learning Elm!
+
+```bash
+elm-live App.elm --open --pushstate --output=app.js
+```
